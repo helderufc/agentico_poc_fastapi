@@ -71,7 +71,7 @@ class UsuarioService:
         )
 
         usuario_criado = self.usuario_repository.create(novo_usuario)
-        return UsuarioResponse.from_attributes(usuario_criado)
+        return UsuarioResponse.model_validate(usuario_criado)
 
     def login(self, requisicao: UsuarioLoginRequest) -> TokenResponse:
         """
@@ -189,7 +189,7 @@ class UsuarioService:
         # Marcar token como usado (RN09)
         self.token_repository.mark_as_used(token.id)
 
-        return UsuarioResponse.from_attributes(usuario_atualizado)
+        return UsuarioResponse.model_validate(usuario_atualizado)
 
     # ==================== PERFIL ====================
 
@@ -202,7 +202,7 @@ class UsuarioService:
         if not usuario:
             raise UsuarioNaoEncontradoException()
 
-        return UsuarioResponse.from_attributes(usuario)
+        return UsuarioResponse.model_validate(usuario)
 
     def alterar_senha(self, usuario_id: int, requisicao: AlterarSenhaRequest) -> UsuarioResponse:
         """
@@ -226,7 +226,7 @@ class UsuarioService:
         usuario.senha = SenhaUtil.hash_senha(requisicao.nova_senha)
         usuario_atualizado = self.usuario_repository.update(usuario)
 
-        return UsuarioResponse.from_attributes(usuario_atualizado)
+        return UsuarioResponse.model_validate(usuario_atualizado)
 
     def upload_foto_perfil(self, usuario_id: int, arquivo: UploadFile) -> str:
         """
@@ -292,7 +292,7 @@ class UsuarioService:
         usuario.status = "ATIVO"
         usuario_atualizado = self.usuario_repository.update(usuario)
 
-        return UsuarioResponse.from_attributes(usuario_atualizado)
+        return UsuarioResponse.model_validate(usuario_atualizado)
 
     def desativar_usuario(self, usuario_id: int) -> UsuarioResponse:
         """
@@ -306,14 +306,14 @@ class UsuarioService:
         usuario.status = "INATIVO"
         usuario_atualizado = self.usuario_repository.update(usuario)
 
-        return UsuarioResponse.from_attributes(usuario_atualizado)
+        return UsuarioResponse.model_validate(usuario_atualizado)
 
     def listar_usuarios_paginated(self, skip: int = 0, limit: int = 10) -> ListaUsuariosResponse:
         """
         Listar todos os usuários com paginação (admin)
         """
         usuarios, total = self.usuario_repository.list_all_paginated(skip, limit)
-        usuarios_response = [UsuarioResponse.from_attributes(u) for u in usuarios]
+        usuarios_response = [UsuarioResponse.model_validate(u) for u in usuarios]
 
         pagina = (skip // limit) + 1 if limit > 0 else 1
 

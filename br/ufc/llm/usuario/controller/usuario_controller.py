@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Header
+from typing import Optional
 from sqlalchemy.orm import Session
 
 from database import get_db
@@ -22,7 +23,7 @@ router = APIRouter(prefix="/api/v1", tags=["autenticacao"])
 # ==================== DEPENDÊNCIAS ====================
 
 async def obter_usuario_atual(
-    authorization: str = None,
+    authorization: Optional[str] = Header(None),
     session: Session = Depends(get_db)
 ) -> UsuarioResponse:
     """

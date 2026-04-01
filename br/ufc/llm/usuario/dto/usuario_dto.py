@@ -6,7 +6,7 @@ from datetime import datetime
 class UsuarioCadastroRequest(BaseModel):
     """DTO para cadastro de novo usuário"""
     nome: str = Field(..., min_length=3, max_length=255, description="Nome completo do usuário")
-    cpf: str = Field(..., regex=r"^\d{11}$", description="CPF sem formatação (11 dígitos)")
+    cpf: str = Field(..., pattern=r"^\d{11}$", description="CPF sem formatação (11 dígitos)")
     email: EmailStr = Field(..., description="E-mail único do usuário")
     senha: str = Field(..., min_length=8, description="Senha com mínimo 8 caracteres")
     perfil: Literal["PROFESSOR", "ALUNO"] = Field(..., description="Perfil do usuário")
