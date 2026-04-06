@@ -1,13 +1,51 @@
 """
-Wrapper do cliente OpenAI GPT-4o para uso nas features de IA.
+Wrapper de IA — suporta OpenAI, Google Gemini e Groq.
+
+Prioridade: Gemini > Groq > OpenAI
+
+Configuração no .env:
+  # OpenAI
+  OPENAI_API_KEY=sk-...
+
+  # Gemini (prioridade máxima)
+  GEMINI_API_KEY=AIza...
+  GEMINI_MODEL=gemini-2.0-flash
+
+  # Groq
+  GROQ_API_KEY=gsk_...
+  GROQ_MODEL=llama-3.3-70b-versatile
 """
-from typing import Optional
 from openai import OpenAI
 from config import settings
 
+_GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+_GROQ_BASE_URL   = "https://api.groq.com/openai/v1"
+
+
+def _provider() -> str:
+    if settings.GEMINI_API_KEY:
+        return "gemini"
+    if settings.GROQ_API_KEY:
+        return "groq"
+    return "openai"
+
 
 def _client() -> OpenAI:
+    p = _provider()
+    if p == "groq":
+        return OpenAI(api_key=settings.GROQ_API_KEY, base_url=_GROQ_BASE_URL)
+    if p == "gemini":
+        return OpenAI(api_key=settings.GEMINI_API_KEY, base_url=_GEMINI_BASE_URL)
     return OpenAI(api_key=settings.OPENAI_API_KEY)
+
+
+def _model() -> str:
+    p = _provider()
+    if p == "gemini":
+        return settings.GEMINI_MODEL
+    if p == "groq":
+        return settings.GROQ_MODEL
+    return "gpt-4o"
 
 
 def gerar_conteudo_aula(texto_fonte: str) -> str:
@@ -23,7 +61,7 @@ def gerar_conteudo_aula(texto_fonte: str) -> str:
         f"Material:\n{texto_fonte}"
     )
     resposta = _client().chat.completions.create(
-        model="gpt-4o",
+        model=_model(),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.7,
     )
@@ -59,12 +97,15 @@ def gerar_quiz(texto_fonte: str, num_perguntas: int = 5) -> list[dict]:
         f'[{{"enunciado":"...","pontos":1,"alternativas":[{{"texto":"...","correta":false}},{{"texto":"...","correta":true}}]}}]\n\n'
         f"Conteúdo:\n{texto_fonte}"
     )
-    resposta = _client().chat.completions.create(
-        model="gpt-4o",
+    kwargs = dict(
+        model=_model(),
         messages=[{"role": "user", "content": prompt}],
         temperature=0.5,
-        response_format={"type": "json_object"},
     )
+    if _provider() == "openai":
+        kwargs["response_format"] = {"type": "json_object"}
+
+    resposta = _client().chat.completions.create(**kwargs)
     raw = resposta.choices[0].message.content.strip()
 
     # GPT retorna {"perguntas": [...]} ou diretamente [...]

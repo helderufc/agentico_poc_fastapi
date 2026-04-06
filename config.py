@@ -13,6 +13,14 @@ class Settings(BaseSettings):
     # OpenAI
     OPENAI_API_KEY: str = ""
 
+    # Gemini (Google) — se preenchido, tem prioridade sobre OpenAI
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-2.0-flash"
+
+    # Groq — se preenchido, tem prioridade sobre OpenAI (mas não sobre Gemini)
+    GROQ_API_KEY: str = ""
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
 
