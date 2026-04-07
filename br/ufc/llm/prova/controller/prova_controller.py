@@ -7,7 +7,7 @@ from br.ufc.llm.shared.domain.resposta_padrao import RespostaPadrao
 from br.ufc.llm.shared.domain.seguranca import JWTUtil
 from br.ufc.llm.prova.dto.prova_dto import (
     ProvaRequest, ProvaResponse, PerguntaRequest, PerguntaResponse,
-    EstatisticasProvaResponse, QuizGeradoResponse,
+    EstatisticasProvaResponse, QuizGeradoResponse, QuizManualRequest,
 )
 from br.ufc.llm.prova.service.prova_service import ProvaService
 from br.ufc.llm.prova.exception.prova_exception import (
@@ -106,6 +106,29 @@ async def deletar_prova(
         return RespostaPadrao(data=None, message="Prova deletada com sucesso", status=200)
     except (ModuloNaoEncontradoException, ProvaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
+    except CursoAcessoNegadoException as e:
+        raise HTTPException(status_code=403, detail=e.message)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/modulos/{modulo_id}/prova/manual", response_model=RespostaPadrao[ProvaResponse], status_code=201)
+async def criar_quiz_manual(
+    modulo_id: int,
+    requisicao: QuizManualRequest,
+    professor_id: int = Depends(_obter_professor_id),
+    session: Session = Depends(get_db)
+):
+    try:
+        service = ProvaService(session)
+        prova = service.criar_quiz_manual(modulo_id, requisicao, professor_id)
+        return RespostaPadrao(data=prova, message="Quiz criado com sucesso", status=201)
+    except ModuloNaoEncontradoException as e:
+        raise HTTPException(status_code=404, detail=e.message)
+    except ProvaJaExisteException as e:
+        raise HTTPException(status_code=400, detail=e.message)
+    except PerguntaInvalidaException as e:
+        raise HTTPException(status_code=400, detail=e.message)
     except CursoAcessoNegadoException as e:
         raise HTTPException(status_code=403, detail=e.message)
     except Exception as e:

@@ -7,6 +7,7 @@ from br.ufc.llm.prova.dto.prova_dto import (
     PerguntaRequest, PerguntaResponse,
     EstatisticasProvaResponse, PerguntaEstatisticaResponse, AlternativaEstatisticaResponse,
     QuizGeradoResponse, PerguntaQuizResponse, AlternativaQuizResponse,
+    QuizManualRequest,
 )
 from br.ufc.llm.prova.repository.prova_repository import ProvaRepository, PerguntaRepository
 from br.ufc.llm.prova.exception.prova_exception import (
@@ -157,6 +158,47 @@ class ProvaService:
             raise PerguntaNaoEncontradaException()
 
         self.pergunta_repository.delete(pergunta)
+
+    def criar_quiz_manual(self, modulo_id: int, requisicao: QuizManualRequest, professor_id: int) -> ProvaResponse:
+        """Criar prova completa com perguntas e alternativas em uma única operação"""
+        self._validar_acesso_modulo(modulo_id, professor_id)
+
+        prova_existente = self.repository.find_by_modulo(modulo_id)
+        if prova_existente:
+            raise ProvaJaExisteException()
+
+        for pergunta_req in requisicao.perguntas:
+            self._validar_alternativas(pergunta_req.alternativas)
+
+        prova = Prova(
+            modulo_id=modulo_id,
+            mostrar_respostas_erradas=requisicao.mostrar_respostas_erradas,
+            mostrar_respostas_corretas=requisicao.mostrar_respostas_corretas,
+            mostrar_valores=requisicao.mostrar_valores
+        )
+        prova_criada = self.repository.create(prova)
+
+        for ordem, pergunta_req in enumerate(requisicao.perguntas, start=1):
+            pergunta = Pergunta(
+                enunciado=pergunta_req.enunciado,
+                pontos=pergunta_req.pontos,
+                ordem=ordem,
+                prova_id=prova_criada.id
+            )
+            self.session.add(pergunta)
+            self.session.flush()
+
+            for alt_req in pergunta_req.alternativas:
+                alternativa = Alternativa(
+                    texto=alt_req.texto,
+                    correta=alt_req.correta,
+                    pergunta_id=pergunta.id
+                )
+                self.session.add(alternativa)
+
+        self.session.commit()
+        self.session.refresh(prova_criada)
+        return self._to_response(prova_criada)
 
     def gerar_quiz_ia(self, modulo_id: int, professor_id: int, num_perguntas: int = 5) -> QuizGeradoResponse:
         """Gera quiz via GPT-4o a partir do conteúdo do módulo (RF35-RF37)"""

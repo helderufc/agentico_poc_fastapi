@@ -46,6 +46,14 @@ class ProvaRequest(BaseModel):
     mostrar_valores: bool = False
 
 
+class QuizManualRequest(BaseModel):
+    """DTO para criação completa de quiz manualmente (prova + perguntas em uma requisição)"""
+    mostrar_respostas_erradas: bool = False
+    mostrar_respostas_corretas: bool = False
+    mostrar_valores: bool = False
+    perguntas: List["PerguntaRequest"] = Field(default_factory=list)
+
+
 class ProvaResponse(BaseModel):
     """DTO de resposta de prova"""
     id: int

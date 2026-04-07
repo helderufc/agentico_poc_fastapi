@@ -393,3 +393,182 @@ class TestEstatisticasProva:
         assert "total_respondentes" in data
         assert "perguntas" in data
         assert "prova_id" in data
+
+
+class TestCriarQuizManual:
+    """Testes para criação de quiz completo manualmente em uma única requisição"""
+
+    def test_criar_quiz_manual_com_sucesso(self, client, headers_professor, modulo):
+        """Criar prova completa com perguntas e alternativas em uma única requisição"""
+        dados = {
+            "mostrar_respostas_erradas": True,
+            "mostrar_respostas_corretas": False,
+            "mostrar_valores": True,
+            "perguntas": [
+                {
+                    "enunciado": "Qual é a capital do Brasil?",
+                    "pontos": 2,
+                    "alternativas": [
+                        {"texto": "São Paulo", "correta": False},
+                        {"texto": "Brasília", "correta": True},
+                        {"texto": "Rio de Janeiro", "correta": False}
+                    ]
+                },
+                {
+                    "enunciado": "Quanto é 2+2?",
+                    "pontos": 1,
+                    "alternativas": [
+                        {"texto": "3", "correta": False},
+                        {"texto": "4", "correta": True}
+                    ]
+                }
+            ]
+        }
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json=dados,
+            headers=headers_professor
+        )
+
+        assert response.status_code == 201
+        data = response.json()["data"]
+        assert data["mostrar_respostas_erradas"] == True
+        assert data["mostrar_valores"] == True
+        assert data["modulo_id"] == modulo.id
+        assert len(data["perguntas"]) == 2
+        assert data["perguntas"][0]["pontos"] == 2
+        assert len(data["perguntas"][0]["alternativas"]) == 3
+
+    def test_criar_quiz_manual_sem_perguntas(self, client, headers_professor, modulo):
+        """Criar prova manual sem perguntas — aceita lista vazia"""
+        dados = {"perguntas": []}
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json=dados,
+            headers=headers_professor
+        )
+        assert response.status_code == 201
+        assert response.json()["data"]["perguntas"] == []
+
+    def test_criar_quiz_manual_modulo_inexistente(self, client, headers_professor):
+        """Módulo inexistente retorna 404"""
+        response = client.post(
+            "/api/v1/modulos/9999/prova/manual",
+            json={"perguntas": []},
+            headers=headers_professor
+        )
+        assert response.status_code == 404
+
+    def test_criar_quiz_manual_modulo_ja_tem_prova(self, client, headers_professor, modulo, prova):
+        """Módulo que já possui prova retorna 400"""
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json={"perguntas": []},
+            headers=headers_professor
+        )
+        assert response.status_code == 400
+
+    def test_criar_quiz_manual_sem_autenticacao(self, client, modulo):
+        """Sem token retorna 401"""
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json={"perguntas": []}
+        )
+        assert response.status_code == 401
+
+    def test_criar_quiz_manual_pergunta_sem_correta(self, client, headers_professor, modulo):
+        """Pergunta sem alternativa correta retorna 400"""
+        dados = {
+            "perguntas": [
+                {
+                    "enunciado": "Pergunta inválida?",
+                    "alternativas": [
+                        {"texto": "A", "correta": False},
+                        {"texto": "B", "correta": False}
+                    ]
+                }
+            ]
+        }
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json=dados,
+            headers=headers_professor
+        )
+        assert response.status_code == 400
+
+    def test_criar_quiz_manual_pergunta_mais_de_uma_correta(self, client, headers_professor, modulo):
+        """Pergunta com mais de uma alternativa correta retorna 400"""
+        dados = {
+            "perguntas": [
+                {
+                    "enunciado": "Pergunta com duas corretas?",
+                    "alternativas": [
+                        {"texto": "A", "correta": True},
+                        {"texto": "B", "correta": True}
+                    ]
+                }
+            ]
+        }
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json=dados,
+            headers=headers_professor
+        )
+        assert response.status_code == 400
+
+    def test_criar_quiz_manual_acesso_negado_outro_professor(self, client, db_session, modulo):
+        """Outro professor não cria quiz em módulo alheio retorna 403"""
+        from br.ufc.llm.usuario.domain.usuario import Usuario
+        from br.ufc.llm.shared.domain.seguranca import SenhaUtil, JWTUtil
+
+        outro = Usuario(
+            nome="Outro Prof",
+            cpf="99988877766",
+            email="outro_manual@example.com",
+            senha=SenhaUtil.hash_senha("senha123456"),
+            perfil="PROFESSOR",
+            status="ATIVO"
+        )
+        db_session.add(outro)
+        db_session.commit()
+
+        tokens = JWTUtil.gerar_tokens(outro.id, outro.email, outro.perfil)
+        headers_outro = {"Authorization": f"Bearer {tokens['access_token']}"}
+
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json={"perguntas": []},
+            headers=headers_outro
+        )
+        assert response.status_code == 403
+
+    def test_criar_quiz_manual_ordem_perguntas(self, client, headers_professor, modulo):
+        """Perguntas são ordenadas sequencialmente (1, 2, 3...)"""
+        dados = {
+            "perguntas": [
+                {
+                    "enunciado": "Primeira?",
+                    "alternativas": [
+                        {"texto": "A", "correta": True},
+                        {"texto": "B", "correta": False}
+                    ]
+                },
+                {
+                    "enunciado": "Segunda?",
+                    "alternativas": [
+                        {"texto": "A", "correta": False},
+                        {"texto": "B", "correta": True}
+                    ]
+                }
+            ]
+        }
+        response = client.post(
+            f"/api/v1/modulos/{modulo.id}/prova/manual",
+            json=dados,
+            headers=headers_professor
+        )
+
+        assert response.status_code == 201
+        perguntas = response.json()["data"]["perguntas"]
+        assert perguntas[0]["ordem"] == 1
+        assert perguntas[1]["ordem"] == 2
