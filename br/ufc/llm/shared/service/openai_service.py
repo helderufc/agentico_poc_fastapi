@@ -15,6 +15,7 @@ Configuração no .env:
   GROQ_API_KEY=gsk_...
   GROQ_MODEL=llama-3.3-70b-versatile
 """
+import re
 from openai import OpenAI
 from config import settings
 
@@ -108,8 +109,25 @@ def gerar_quiz(texto_fonte: str, num_perguntas: int = 5) -> list[dict]:
     resposta = _client().chat.completions.create(**kwargs)
     raw = resposta.choices[0].message.content.strip()
 
-    # GPT retorna {"perguntas": [...]} ou diretamente [...]
-    parsed = json.loads(raw)
+    # Remove blocos markdown caso o modelo ignore a instrução
+    if raw.startswith("```"):
+        raw = re.sub(r"^```[a-z]*\n?", "", raw)
+        raw = re.sub(r"\n?```$", "", raw.rstrip())
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        # Tenta extrair o primeiro array JSON válido da resposta
+        match = re.search(r"\[.*\]", raw, re.DOTALL)
+        if match:
+            parsed = json.loads(match.group())
+        else:
+            match = re.search(r"\{.*\}", raw, re.DOTALL)
+            if match:
+                parsed = json.loads(match.group())
+            else:
+                raise ValueError(f"A IA retornou JSON inválido: {raw[:200]}")
+
     if isinstance(parsed, dict):
         # tenta chave "perguntas" ou pega o primeiro valor da dict
         perguntas = parsed.get("perguntas") or next(iter(parsed.values()))

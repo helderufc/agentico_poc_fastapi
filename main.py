@@ -17,6 +17,7 @@ from br.ufc.llm.aula.controller.aula_controller import router as aula_router
 from br.ufc.llm.prova.controller.prova_controller import router as prova_router
 from br.ufc.llm.matricula.controller.matricula_controller import router as matricula_router
 from br.ufc.llm.matricula.domain.matricula import Matricula, RespostaProva
+from br.ufc.llm.shared.controller.task_controller import router as task_router
 
 # Criar tabelas
 Base.metadata.create_all(bind=engine)
@@ -47,6 +48,7 @@ app.include_router(modulo_router)
 app.include_router(aula_router)
 app.include_router(prova_router)
 app.include_router(matricula_router)
+app.include_router(task_router)
 
 
 @app.get("/")

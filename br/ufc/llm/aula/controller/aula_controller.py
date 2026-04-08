@@ -130,26 +130,21 @@ async def deletar_aula(
 
 @router.post(
     "/modulos/{modulo_id}/aulas/{aula_id}/gerar-conteudo",
-    response_model=RespostaPadrao[ConteudoGeradoResponse]
+    status_code=202,
 )
 async def gerar_conteudo(
     modulo_id: int,
     aula_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
 ):
-    try:
-        service = AulaService(session)
-        resultado = service.gerar_conteudo(modulo_id, aula_id, professor_id)
-        return RespostaPadrao(data=resultado, message="Conteúdo gerado com sucesso", status=200)
-    except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
-        raise HTTPException(status_code=404, detail=e.message)
-    except CursoAcessoNegadoException as e:
-        raise HTTPException(status_code=403, detail=e.message)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    from br.ufc.llm.shared.tasks.ia_tasks import gerar_conteudo_aula_task
+
+    task = gerar_conteudo_aula_task.delay(modulo_id, aula_id, professor_id)
+    return RespostaPadrao(
+        data={"task_id": task.id, "status": "processando"},
+        message="Geração de conteúdo iniciada. Consulte GET /api/v1/tasks/{task_id} para o resultado.",
+        status=202,
+    )
 
 
 @router.post(

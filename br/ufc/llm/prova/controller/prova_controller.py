@@ -135,24 +135,19 @@ async def criar_quiz_manual(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/modulos/{modulo_id}/prova/gerar-quiz-ia", response_model=RespostaPadrao[QuizGeradoResponse])
+@router.post("/modulos/{modulo_id}/prova/gerar-quiz-ia", status_code=202)
 async def gerar_quiz_ia(
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
 ):
-    try:
-        service = ProvaService(session)
-        quiz = service.gerar_quiz_ia(modulo_id, professor_id)
-        return RespostaPadrao(data=quiz, message="Quiz gerado com sucesso", status=200)
-    except ModuloNaoEncontradoException as e:
-        raise HTTPException(status_code=404, detail=e.message)
-    except CursoAcessoNegadoException as e:
-        raise HTTPException(status_code=403, detail=e.message)
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    from br.ufc.llm.shared.tasks.ia_tasks import gerar_quiz_ia_task
+
+    task = gerar_quiz_ia_task.delay(modulo_id, professor_id)
+    return RespostaPadrao(
+        data={"task_id": task.id, "status": "processando"},
+        message="Geração do quiz iniciada. Consulte GET /api/v1/tasks/{task_id} para o resultado.",
+        status=202,
+    )
 
 
 @router.get("/modulos/{modulo_id}/prova/estatisticas", response_model=RespostaPadrao[EstatisticasProvaResponse])
