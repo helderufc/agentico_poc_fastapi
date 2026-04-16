@@ -9,11 +9,14 @@ from br.ufc.llm.modulo.dto.modulo_dto import ModuloEditarRequest, ModuloResponse
 from br.ufc.llm.modulo.service.modulo_service import ModuloService
 from br.ufc.llm.modulo.exception.modulo_exception import ModuloNaoEncontradoException, ModuloAcessoNegadoException
 from br.ufc.llm.curso.exception.curso_exception import CursoNaoEncontradoException, CursoAcessoNegadoException
+from config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["modulos"])
 
 
 def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
+    if settings.LOAD_TEST_MODE:
+        return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
     token = authorization.split(" ")[1]

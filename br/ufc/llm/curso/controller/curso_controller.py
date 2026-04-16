@@ -8,12 +8,15 @@ from br.ufc.llm.shared.domain.seguranca import JWTUtil
 from br.ufc.llm.curso.dto.curso_dto import CursoRequest, CursoResponse, ListaCursosResponse
 from br.ufc.llm.curso.service.curso_service import CursoService
 from br.ufc.llm.curso.exception.curso_exception import CursoNaoEncontradoException, CursoAcessoNegadoException
+from config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["cursos"])
 
 
 def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
     """Extrai o professor_id do JWT"""
+    if settings.LOAD_TEST_MODE:
+        return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
     token = authorization.split(" ")[1]

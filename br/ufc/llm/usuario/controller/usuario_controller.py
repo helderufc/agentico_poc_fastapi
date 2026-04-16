@@ -16,6 +16,7 @@ from br.ufc.llm.usuario.dto.usuario_dto import (
 )
 from br.ufc.llm.usuario.service.usuario_service import UsuarioService
 from br.ufc.llm.usuario.exception.usuario_exception import UsuarioException
+from config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["autenticacao"])
 
@@ -30,6 +31,10 @@ async def obter_usuario_atual(
     Dependency para extrair usuário atual do JWT
     Uso: get_current_user = Depends(obter_usuario_atual)
     """
+    if settings.LOAD_TEST_MODE:
+        service = UsuarioService(session)
+        return service.obter_perfil(settings.LOAD_TEST_PROFESSOR_ID)
+
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
 
@@ -52,6 +57,8 @@ async def obter_usuario_atual(
 
 async def require_admin(usuario: UsuarioResponse = Depends(obter_usuario_atual)) -> UsuarioResponse:
     """Dependency para validar se usuário é ADMIN"""
+    if settings.LOAD_TEST_MODE:
+        return usuario
     if usuario.perfil != "ADMIN":
         raise HTTPException(status_code=403, detail="Acesso restrito a administradores")
     return usuario

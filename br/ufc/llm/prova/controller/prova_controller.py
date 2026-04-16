@@ -16,11 +16,14 @@ from br.ufc.llm.prova.exception.prova_exception import (
 )
 from br.ufc.llm.modulo.exception.modulo_exception import ModuloNaoEncontradoException
 from br.ufc.llm.curso.exception.curso_exception import CursoAcessoNegadoException
+from config import settings
 
 router = APIRouter(prefix="/api/v1", tags=["provas"])
 
 
 def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
+    if settings.LOAD_TEST_MODE:
+        return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
     token = authorization.split(" ")[1]

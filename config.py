@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     APP_NAME: str = "PoC LLM UFC"
     DEBUG: bool = False
 
+    # Testes de carga — desabilita validação de JWT quando True
+    LOAD_TEST_MODE: bool = True
+    LOAD_TEST_PROFESSOR_ID: int = 1
+
     class Config:
         env_file = ".env"
         case_sensitive = True

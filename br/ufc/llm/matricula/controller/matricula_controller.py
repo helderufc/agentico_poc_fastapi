@@ -32,10 +32,14 @@ from br.ufc.llm.matricula.exception.matricula_exception import (
     ResultadoNaoEncontradoException,
 )
 
+from config import settings
+
 router = APIRouter(prefix="/api/v1", tags=["matriculas"])
 
 
 def _obter_payload(authorization: Optional[str] = Header(None)) -> dict:
+    if settings.LOAD_TEST_MODE:
+        return {"sub": str(settings.LOAD_TEST_PROFESSOR_ID), "perfil": "ALUNO"}
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Token não fornecido")
     token = authorization.split(" ")[1]
