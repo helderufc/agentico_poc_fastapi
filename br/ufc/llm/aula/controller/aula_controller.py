@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from br.ufc.llm.shared.domain.resposta_padrao import RespostaPadrao
@@ -41,11 +41,11 @@ async def criar_aula(
     modulo_id: int,
     requisicao: AulaRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        aula = service.criar_aula(modulo_id, requisicao, professor_id)
+        aula = await service.criar_aula(modulo_id, requisicao, professor_id)
         return RespostaPadrao(data=aula, message="Aula criada com sucesso", status=201)
     except ModuloNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -59,11 +59,11 @@ async def criar_aula(
 async def listar_aulas(
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        resultado = service.listar_aulas(modulo_id, professor_id)
+        resultado = await service.listar_aulas(modulo_id, professor_id)
         return RespostaPadrao(data=resultado, message="Aulas listadas com sucesso", status=200)
     except ModuloNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -78,11 +78,11 @@ async def obter_aula(
     modulo_id: int,
     aula_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        aula = service.obter_aula(modulo_id, aula_id, professor_id)
+        aula = await service.obter_aula(modulo_id, aula_id, professor_id)
         return RespostaPadrao(data=aula, message="Aula obtida com sucesso", status=200)
     except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -98,11 +98,11 @@ async def editar_aula(
     aula_id: int,
     requisicao: AulaEditarRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        aula = service.editar_aula(modulo_id, aula_id, requisicao, professor_id)
+        aula = await service.editar_aula(modulo_id, aula_id, requisicao, professor_id)
         return RespostaPadrao(data=aula, message="Aula atualizada com sucesso", status=200)
     except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -117,11 +117,11 @@ async def deletar_aula(
     modulo_id: int,
     aula_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        service.deletar_aula(modulo_id, aula_id, professor_id)
+        await service.deletar_aula(modulo_id, aula_id, professor_id)
         return RespostaPadrao(data=None, message="Aula deletada com sucesso", status=200)
     except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -131,17 +131,13 @@ async def deletar_aula(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post(
-    "/modulos/{modulo_id}/aulas/{aula_id}/gerar-conteudo",
-    status_code=202,
-)
+@router.post("/modulos/{modulo_id}/aulas/{aula_id}/gerar-conteudo", status_code=202)
 async def gerar_conteudo(
     modulo_id: int,
     aula_id: int,
     professor_id: int = Depends(_obter_professor_id),
 ):
     from br.ufc.llm.shared.tasks.ia_tasks import gerar_conteudo_aula_task
-
     task = gerar_conteudo_aula_task.delay(modulo_id, aula_id, professor_id)
     return RespostaPadrao(
         data={"task_id": task.id, "status": "processando"},
@@ -150,20 +146,17 @@ async def gerar_conteudo(
     )
 
 
-@router.post(
-    "/modulos/{modulo_id}/aulas/{aula_id}/confirmar-conteudo",
-    response_model=RespostaPadrao[AulaResponse]
-)
+@router.post("/modulos/{modulo_id}/aulas/{aula_id}/confirmar-conteudo", response_model=RespostaPadrao[AulaResponse])
 async def confirmar_conteudo(
     modulo_id: int,
     aula_id: int,
     requisicao: ConfirmarConteudoRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        aula = service.confirmar_conteudo(modulo_id, aula_id, professor_id, requisicao)
+        aula = await service.confirmar_conteudo(modulo_id, aula_id, professor_id, requisicao)
         return RespostaPadrao(data=aula, message="Conteúdo confirmado e salvo com sucesso", status=200)
     except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -179,11 +172,11 @@ async def upload_arquivo(
     aula_id: int,
     arquivo: UploadFile = File(...),
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = AulaService(session)
-        aula = service.upload_arquivo(modulo_id, aula_id, professor_id, arquivo)
+        aula = await service.upload_arquivo(modulo_id, aula_id, professor_id, arquivo)
         return RespostaPadrao(data=aula, message="Arquivo enviado com sucesso", status=200)
     except (ModuloNaoEncontradoException, AulaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)

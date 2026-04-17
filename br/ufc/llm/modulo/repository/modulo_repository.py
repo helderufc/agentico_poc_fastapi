@@ -1,41 +1,43 @@
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from br.ufc.llm.modulo.domain.modulo import Modulo
 
 
 class ModuloRepository:
-    """Repositório para operações de persistência de módulos"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, modulo: Modulo) -> Modulo:
+    async def create(self, modulo: Modulo) -> Modulo:
         self.session.add(modulo)
-        self.session.commit()
-        self.session.refresh(modulo)
+        await self.session.commit()
+        await self.session.refresh(modulo)
         return modulo
 
-    def find_by_id(self, modulo_id: int) -> Optional[Modulo]:
-        return self.session.query(Modulo).filter(Modulo.id == modulo_id).first()
+    async def find_by_id(self, modulo_id: int) -> Optional[Modulo]:
+        result = await self.session.execute(select(Modulo).where(Modulo.id == modulo_id))
+        return result.scalars().first()
 
-    def find_by_curso(self, curso_id: int) -> List[Modulo]:
-        return (
-            self.session.query(Modulo)
-            .filter(Modulo.curso_id == curso_id)
-            .order_by(Modulo.ordem)
-            .all()
+    async def find_by_curso(self, curso_id: int) -> List[Modulo]:
+        result = await self.session.execute(
+            select(Modulo).where(Modulo.curso_id == curso_id).order_by(Modulo.ordem)
         )
+        return list(result.scalars().all())
 
-    def count_by_curso(self, curso_id: int) -> int:
-        return self.session.query(Modulo).filter(Modulo.curso_id == curso_id).count()
+    async def count_by_curso(self, curso_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Modulo).where(Modulo.curso_id == curso_id)
+        )
+        return result.scalar()
 
-    def update(self, modulo: Modulo) -> Modulo:
-        self.session.merge(modulo)
-        self.session.commit()
-        self.session.refresh(modulo)
+    async def update(self, modulo: Modulo) -> Modulo:
+        modulo = await self.session.merge(modulo)
+        await self.session.commit()
+        await self.session.refresh(modulo)
         return modulo
 
-    def delete(self, modulo: Modulo) -> None:
-        self.session.delete(modulo)
-        self.session.commit()
+    async def delete(self, modulo: Modulo) -> None:
+        await self.session.delete(modulo)
+        await self.session.commit()

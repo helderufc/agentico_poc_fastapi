@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from br.ufc.llm.shared.domain.resposta_padrao import RespostaPadrao
@@ -13,8 +13,7 @@ from config import settings
 router = APIRouter(prefix="/api/v1", tags=["cursos"])
 
 
-def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
-    """Extrai o professor_id do JWT"""
+def _obter_professor_id(authorization: Optional[str] = Header(None)) -> int:
     if settings.LOAD_TEST_MODE:
         return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
@@ -39,11 +38,11 @@ def _obter_professor_id(authorization: Optional[str] = Header(None), session: Se
 async def criar_curso(
     requisicao: CursoRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.criar_curso(requisicao, professor_id)
+        curso = await service.criar_curso(requisicao, professor_id)
         return RespostaPadrao(data=curso, message="Curso criado com sucesso", status=201)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -54,11 +53,11 @@ async def listar_cursos(
     status: Optional[str] = Query(None),
     q: Optional[str] = Query(None),
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        resultado = service.listar_cursos(professor_id, status, q)
+        resultado = await service.listar_cursos(professor_id, status, q)
         return RespostaPadrao(data=resultado, message="Cursos listados com sucesso", status=200)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -68,11 +67,11 @@ async def listar_cursos(
 async def obter_curso(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.obter_curso(curso_id, professor_id)
+        curso = await service.obter_curso(curso_id, professor_id)
         return RespostaPadrao(data=curso, message="Curso obtido com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -87,11 +86,11 @@ async def editar_curso(
     curso_id: int,
     requisicao: CursoRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.editar_curso(curso_id, requisicao, professor_id)
+        curso = await service.editar_curso(curso_id, requisicao, professor_id)
         return RespostaPadrao(data=curso, message="Curso atualizado com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -105,11 +104,11 @@ async def editar_curso(
 async def deletar_curso(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        service.deletar_curso(curso_id, professor_id)
+        await service.deletar_curso(curso_id, professor_id)
         return RespostaPadrao(data=None, message="Curso deletado com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -124,11 +123,11 @@ async def upload_capa(
     curso_id: int,
     arquivo: UploadFile = File(...),
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.upload_capa(curso_id, professor_id, arquivo)
+        curso = await service.upload_capa(curso_id, professor_id, arquivo)
         return RespostaPadrao(data=curso, message="Capa enviada com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -144,11 +143,11 @@ async def upload_capa(
 async def publicar_curso(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.publicar_curso(curso_id, professor_id)
+        curso = await service.publicar_curso(curso_id, professor_id)
         return RespostaPadrao(data=curso, message="Curso publicado com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -162,11 +161,11 @@ async def publicar_curso(
 async def arquivar_curso(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = CursoService(session)
-        curso = service.arquivar_curso(curso_id, professor_id)
+        curso = await service.arquivar_curso(curso_id, professor_id)
         return RespostaPadrao(data=curso, message="Curso arquivado com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)

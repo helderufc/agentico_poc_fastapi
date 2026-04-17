@@ -14,8 +14,8 @@ class Prova(Base):
     mostrar_valores = Column(Boolean, nullable=False, default=False)
 
     # Relacionamentos
-    modulo = relationship("Modulo", back_populates="prova")
-    perguntas = relationship("Pergunta", back_populates="prova", cascade="all, delete-orphan")
+    modulo = relationship("Modulo", back_populates="prova", lazy="selectin")
+    perguntas = relationship("Pergunta", back_populates="prova", cascade="all, delete-orphan", lazy="selectin")
 
     def __repr__(self):
         return f"<Prova(id={self.id}, modulo_id={self.modulo_id})>"
@@ -33,7 +33,7 @@ class Pergunta(Base):
 
     # Relacionamentos
     prova = relationship("Prova", back_populates="perguntas")
-    alternativas = relationship("Alternativa", back_populates="pergunta", cascade="all, delete-orphan")
+    alternativas = relationship("Alternativa", back_populates="pergunta", cascade="all, delete-orphan", lazy="selectin")
 
     def __repr__(self):
         return f"<Pergunta(id={self.id}, enunciado={self.enunciado[:50]}...)>"

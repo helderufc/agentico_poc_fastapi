@@ -1,104 +1,103 @@
+from datetime import datetime
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 from br.ufc.llm.usuario.domain.usuario import Usuario, TokenRecuperacaoSenha
 from br.ufc.llm.usuario.exception.usuario_exception import UsuarioNaoEncontradoException
 
 
 class UsuarioRepository:
-    """Repositório para operações de persistência de usuários"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, usuario: Usuario) -> Usuario:
-        """Criar novo usuário"""
+    async def create(self, usuario: Usuario) -> Usuario:
         self.session.add(usuario)
-        self.session.commit()
-        self.session.refresh(usuario)
+        await self.session.commit()
+        await self.session.refresh(usuario)
         return usuario
 
-    def find_by_id(self, usuario_id: int) -> Optional[Usuario]:
-        """Buscar usuário por ID"""
-        return self.session.query(Usuario).filter(Usuario.id == usuario_id).first()
+    async def find_by_id(self, usuario_id: int) -> Optional[Usuario]:
+        result = await self.session.execute(select(Usuario).where(Usuario.id == int(usuario_id)))
+        return result.scalars().first()
 
-    def find_by_cpf(self, cpf: str) -> Optional[Usuario]:
-        """Buscar usuário por CPF"""
-        return self.session.query(Usuario).filter(Usuario.cpf == cpf).first()
+    async def find_by_cpf(self, cpf: str) -> Optional[Usuario]:
+        result = await self.session.execute(select(Usuario).where(Usuario.cpf == cpf))
+        return result.scalars().first()
 
-    def find_by_email(self, email: str) -> Optional[Usuario]:
-        """Buscar usuário por e-mail"""
-        return self.session.query(Usuario).filter(Usuario.email == email).first()
+    async def find_by_email(self, email: str) -> Optional[Usuario]:
+        result = await self.session.execute(select(Usuario).where(Usuario.email == email))
+        return result.scalars().first()
 
-    def find_by_email_ou_nome(self, email_ou_nome: str) -> Optional[Usuario]:
-        """Buscar usuário por e-mail ou nome"""
-        return self.session.query(Usuario).filter(
-            (Usuario.email == email_ou_nome) | (Usuario.nome == email_ou_nome)
-        ).first()
+    async def find_by_email_ou_nome(self, email_ou_nome: str) -> Optional[Usuario]:
+        result = await self.session.execute(
+            select(Usuario).where(
+                (Usuario.email == email_ou_nome) | (Usuario.nome == email_ou_nome)
+            )
+        )
+        return result.scalars().first()
 
-    def update(self, usuario: Usuario) -> Usuario:
-        """Atualizar usuário"""
-        self.session.merge(usuario)
-        self.session.commit()
+    async def update(self, usuario: Usuario) -> Usuario:
+        usuario = await self.session.merge(usuario)
+        await self.session.commit()
         return usuario
 
-    def delete(self, usuario_id: int) -> bool:
-        """Deletar usuário por ID"""
-        usuario = self.find_by_id(usuario_id)
+    async def delete(self, usuario_id: int) -> bool:
+        usuario = await self.find_by_id(usuario_id)
         if usuario is None:
             raise UsuarioNaoEncontradoException()
-        self.session.delete(usuario)
-        self.session.commit()
+        await self.session.delete(usuario)
+        await self.session.commit()
         return True
 
-    def list_all_paginated(self, skip: int = 0, limit: int = 10) -> tuple[List[Usuario], int]:
-        """Listar todos os usuários com paginação"""
-        total = self.session.query(Usuario).count()
-        usuarios = self.session.query(Usuario).offset(skip).limit(limit).all()
-        return usuarios, total
+    async def list_all_paginated(self, skip: int = 0, limit: int = 10) -> tuple[List[Usuario], int]:
+        total_result = await self.session.execute(select(func.count()).select_from(Usuario))
+        total = total_result.scalar()
+        result = await self.session.execute(select(Usuario).offset(skip).limit(limit))
+        usuarios = result.scalars().all()
+        return list(usuarios), total
 
 
 class TokenRecuperacaoRepository:
-    """Repositório para operações de tokens de recuperação de senha"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, token: TokenRecuperacaoSenha) -> TokenRecuperacaoSenha:
-        """Criar novo token de recuperação"""
+    async def create(self, token: TokenRecuperacaoSenha) -> TokenRecuperacaoSenha:
         self.session.add(token)
-        self.session.commit()
-        self.session.refresh(token)
+        await self.session.commit()
+        await self.session.refresh(token)
         return token
 
-    def find_by_token(self, token_string: str) -> Optional[TokenRecuperacaoSenha]:
-        """Buscar token pelo string"""
-        return self.session.query(TokenRecuperacaoSenha).filter(
-            TokenRecuperacaoSenha.token == token_string
-        ).first()
+    async def find_by_token(self, token_string: str) -> Optional[TokenRecuperacaoSenha]:
+        result = await self.session.execute(
+            select(TokenRecuperacaoSenha).where(TokenRecuperacaoSenha.token == token_string)
+        )
+        return result.scalars().first()
 
-    def find_by_usuario_id(self, usuario_id: int) -> List[TokenRecuperacaoSenha]:
-        """Buscar todos os tokens de um usuário"""
-        return self.session.query(TokenRecuperacaoSenha).filter(
-            TokenRecuperacaoSenha.usuario_id == usuario_id
-        ).all()
+    async def find_by_usuario_id(self, usuario_id: int) -> List[TokenRecuperacaoSenha]:
+        result = await self.session.execute(
+            select(TokenRecuperacaoSenha).where(TokenRecuperacaoSenha.usuario_id == usuario_id)
+        )
+        return list(result.scalars().all())
 
-    def mark_as_used(self, token_id: int) -> TokenRecuperacaoSenha:
-        """Marcar token como usado"""
-        token = self.session.query(TokenRecuperacaoSenha).filter(
-            TokenRecuperacaoSenha.id == token_id
-        ).first()
+    async def mark_as_used(self, token_id: int) -> Optional[TokenRecuperacaoSenha]:
+        result = await self.session.execute(
+            select(TokenRecuperacaoSenha).where(TokenRecuperacaoSenha.id == token_id)
+        )
+        token = result.scalars().first()
         if token:
             token.usado = True
-            self.session.merge(token)
-            self.session.commit()
+            token = await self.session.merge(token)
+            await self.session.commit()
         return token
 
-    def delete_expired(self, usuario_id: int) -> int:
-        """Deletar tokens expirados de um usuário"""
-        from datetime import datetime
-        deleted = self.session.query(TokenRecuperacaoSenha).filter(
-            TokenRecuperacaoSenha.usuario_id == usuario_id,
-            TokenRecuperacaoSenha.expiracao < datetime.utcnow()
-        ).delete()
-        self.session.commit()
-        return deleted
+    async def delete_expired(self, usuario_id: int) -> int:
+        result = await self.session.execute(
+            delete(TokenRecuperacaoSenha).where(
+                TokenRecuperacaoSenha.usuario_id == usuario_id,
+                TokenRecuperacaoSenha.expiracao < datetime.utcnow()
+            )
+        )
+        await self.session.commit()
+        return result.rowcount

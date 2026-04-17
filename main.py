@@ -1,14 +1,15 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
-from database import Base, engine
+from database import Base, async_engine
 
-# Importar models para garantir que sejam registrados no metadata
 from br.ufc.llm.usuario.domain.usuario import Usuario, TokenRecuperacaoSenha
 from br.ufc.llm.curso.domain.curso import Curso
 from br.ufc.llm.modulo.domain.modulo import Modulo
 from br.ufc.llm.aula.domain.aula import Aula
 from br.ufc.llm.prova.domain.prova import Prova, Pergunta, Alternativa
+from br.ufc.llm.matricula.domain.matricula import Matricula, RespostaProva
 
 from br.ufc.llm.usuario.controller.usuario_controller import router as usuario_router
 from br.ufc.llm.curso.controller.curso_controller import router as curso_router
@@ -16,23 +17,26 @@ from br.ufc.llm.modulo.controller.modulo_controller import router as modulo_rout
 from br.ufc.llm.aula.controller.aula_controller import router as aula_router
 from br.ufc.llm.prova.controller.prova_controller import router as prova_router
 from br.ufc.llm.matricula.controller.matricula_controller import router as matricula_router
-from br.ufc.llm.matricula.domain.matricula import Matricula, RespostaProva
 from br.ufc.llm.shared.controller.task_controller import router as task_router
 
-# Criar tabelas
-Base.metadata.create_all(bind=engine)
 
-# Inicializar aplicação
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with async_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
 app = FastAPI(
     title=settings.APP_NAME,
     version="0.1.0",
     debug=settings.DEBUG,
     description="API REST para PoC LLM UFC",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
-# Middleware CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,7 +45,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Registrar routers
 app.include_router(usuario_router)
 app.include_router(curso_router)
 app.include_router(modulo_router)

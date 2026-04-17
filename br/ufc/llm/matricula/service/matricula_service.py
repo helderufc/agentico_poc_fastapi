@@ -1,5 +1,5 @@
 from typing import List, Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from br.ufc.llm.matricula.repository.matricula_repository import MatriculaRepository
 from br.ufc.llm.matricula.domain.matricula import Matricula, RespostaProva
@@ -36,35 +36,31 @@ from br.ufc.llm.matricula.exception.matricula_exception import (
 
 class MatriculaService:
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.repo = MatriculaRepository(session)
 
-    # ==================== CATÁLOGO ====================
-
-    def listar_catalogo(self, q: Optional[str] = None) -> ListaCatalogoCursosResponse:
-        cursos = self.repo.find_cursos_publicados(q)
+    async def listar_catalogo(self, q: Optional[str] = None) -> ListaCatalogoCursosResponse:
+        cursos = await self.repo.find_cursos_publicados(q)
         return ListaCatalogoCursosResponse(
             cursos=[CursoResumidoResponse.model_validate(c) for c in cursos],
             total=len(cursos)
         )
 
-    def obter_curso_publicado(self, curso_id: int) -> CursoResumidoResponse:
-        curso = self.repo.find_curso_publicado_by_id(curso_id)
+    async def obter_curso_publicado(self, curso_id: int) -> CursoResumidoResponse:
+        curso = await self.repo.find_curso_publicado_by_id(curso_id)
         if not curso:
             raise CursoNaoPublicadoException()
         return CursoResumidoResponse.model_validate(curso)
 
-    # ==================== MATRÍCULA ====================
-
-    def matricular(self, aluno_id: int, perfil: str, requisicao: MatriculaRequest) -> MatriculaResponse:
+    async def matricular(self, aluno_id: int, perfil: str, requisicao: MatriculaRequest) -> MatriculaResponse:
         if perfil != "ALUNO":
             raise PerfilInvalidoException()
 
-        curso = self.repo.find_curso_publicado_by_id(requisicao.curso_id)
+        curso = await self.repo.find_curso_publicado_by_id(requisicao.curso_id)
         if not curso:
             raise CursoNaoPublicadoException()
 
-        existente = self.repo.find_by_aluno_and_curso(aluno_id, requisicao.curso_id)
+        existente = await self.repo.find_by_aluno_and_curso(aluno_id, requisicao.curso_id)
         if existente:
             raise MatriculaJaExisteException()
 
@@ -82,49 +78,47 @@ class MatriculaService:
             genero=requisicao.genero,
             idade=requisicao.idade
         )
-        matricula = self.repo.create(matricula)
+        matricula = await self.repo.create(matricula)
         return MatriculaResponse.model_validate(matricula)
 
-    def listar_minhas_matriculas(self, aluno_id: int) -> ListaMatriculasResponse:
-        matriculas = self.repo.find_by_aluno(aluno_id)
+    async def listar_minhas_matriculas(self, aluno_id: int) -> ListaMatriculasResponse:
+        matriculas = await self.repo.find_by_aluno(aluno_id)
         return ListaMatriculasResponse(
             matriculas=[MatriculaResponse.model_validate(m) for m in matriculas],
             total=len(matriculas)
         )
 
-    # ==================== CONTEÚDO ====================
-
-    def _verificar_matricula(self, aluno_id: int, curso_id: int) -> None:
-        matricula = self.repo.find_by_aluno_and_curso(aluno_id, curso_id)
+    async def _verificar_matricula(self, aluno_id: int, curso_id: int) -> None:
+        matricula = await self.repo.find_by_aluno_and_curso(aluno_id, curso_id)
         if not matricula:
             raise AcessoNegadoMatriculaException()
 
-    def listar_modulos(self, aluno_id: int, curso_id: int) -> ListaModulosResponse:
-        self._verificar_matricula(aluno_id, curso_id)
-        modulos = self.repo.find_modulos_by_curso(curso_id)
+    async def listar_modulos(self, aluno_id: int, curso_id: int) -> ListaModulosResponse:
+        await self._verificar_matricula(aluno_id, curso_id)
+        modulos = await self.repo.find_modulos_by_curso(curso_id)
         return ListaModulosResponse(
             modulos=[ModuloResumidoResponse.model_validate(m) for m in modulos],
             total=len(modulos)
         )
 
-    def listar_aulas(self, aluno_id: int, curso_id: int, modulo_id: int) -> ListaAulasResponse:
-        self._verificar_matricula(aluno_id, curso_id)
-        aulas = self.repo.find_aulas_by_modulo(modulo_id)
+    async def listar_aulas(self, aluno_id: int, curso_id: int, modulo_id: int) -> ListaAulasResponse:
+        await self._verificar_matricula(aluno_id, curso_id)
+        aulas = await self.repo.find_aulas_by_modulo(modulo_id)
         return ListaAulasResponse(
             aulas=[AulaResumidaResponse.model_validate(a) for a in aulas],
             total=len(aulas)
         )
 
-    def obter_aula(self, aluno_id: int, curso_id: int, modulo_id: int, aula_id: int) -> AulaCompletaResponse:
-        self._verificar_matricula(aluno_id, curso_id)
-        aula = self.repo.find_aula_by_id(aula_id)
+    async def obter_aula(self, aluno_id: int, curso_id: int, modulo_id: int, aula_id: int) -> AulaCompletaResponse:
+        await self._verificar_matricula(aluno_id, curso_id)
+        aula = await self.repo.find_aula_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise MatriculaNaoEncontradaException()
         return AulaCompletaResponse.model_validate(aula)
 
-    def obter_prova(self, aluno_id: int, curso_id: int, modulo_id: int) -> ProvaSemGabaritoResponse:
-        self._verificar_matricula(aluno_id, curso_id)
-        prova = self.repo.find_prova_by_modulo(modulo_id)
+    async def obter_prova(self, aluno_id: int, curso_id: int, modulo_id: int) -> ProvaSemGabaritoResponse:
+        await self._verificar_matricula(aluno_id, curso_id)
+        prova = await self.repo.find_prova_by_modulo(modulo_id)
         if not prova:
             raise MatriculaNaoEncontradaException()
 
@@ -146,27 +140,18 @@ class MatriculaService:
             perguntas=perguntas
         )
 
-    # ==================== PROVA ====================
-
-    def _obter_curso_id_da_prova(self, prova_id: int) -> int:
-        prova = self.repo.find_prova_by_id(prova_id)
-        if not prova:
-            raise MatriculaNaoEncontradaException()
-        modulo = prova.modulo
-        return modulo.curso_id
-
-    def responder_prova(
+    async def responder_prova(
         self,
         aluno_id: int,
         prova_id: int,
         respostas: List[RespostaItemRequest]
     ) -> None:
-        prova = self.repo.find_prova_by_id(prova_id)
+        prova = await self.repo.find_prova_by_id(prova_id)
         if not prova:
             raise MatriculaNaoEncontradaException()
 
         curso_id = prova.modulo.curso_id
-        self._verificar_matricula(aluno_id, curso_id)
+        await self._verificar_matricula(aluno_id, curso_id)
 
         if not respostas:
             raise RespostasIncompletasException()
@@ -176,7 +161,7 @@ class MatriculaService:
             raise RespostasIncompletasException()
 
         for item in respostas:
-            existente = self.repo.find_resposta_by_aluno_and_pergunta(aluno_id, item.pergunta_id)
+            existente = await self.repo.find_resposta_by_aluno_and_pergunta(aluno_id, item.pergunta_id)
             if existente:
                 raise RespostaJaExisteException()
 
@@ -186,21 +171,20 @@ class MatriculaService:
                 pergunta_id=item.pergunta_id,
                 alternativa_id=item.alternativa_id
             )
-            self.repo.create_resposta(resposta)
+            await self.repo.create_resposta(resposta)
 
-    def obter_resultado(self, aluno_id: int, prova_id: int) -> ResultadoProvaResponse:
-        prova = self.repo.find_prova_by_id(prova_id)
+    async def obter_resultado(self, aluno_id: int, prova_id: int) -> ResultadoProvaResponse:
+        prova = await self.repo.find_prova_by_id(prova_id)
         if not prova:
             raise MatriculaNaoEncontradaException()
 
         curso_id = prova.modulo.curso_id
-        self._verificar_matricula(aluno_id, curso_id)
+        await self._verificar_matricula(aluno_id, curso_id)
 
-        respostas = self.repo.find_respostas_by_aluno_and_prova(aluno_id, prova_id)
+        respostas = await self.repo.find_respostas_by_aluno_and_prova(aluno_id, prova_id)
         if not respostas:
             raise ResultadoNaoEncontradoException()
 
-        # Montar mapa de perguntas
         perguntas_map = {p.id: p for p in prova.perguntas}
         alternativas_map = {
             a.id: a

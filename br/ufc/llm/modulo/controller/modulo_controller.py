@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from br.ufc.llm.shared.domain.resposta_padrao import RespostaPadrao
@@ -14,7 +14,7 @@ from config import settings
 router = APIRouter(prefix="/api/v1", tags=["modulos"])
 
 
-def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
+def _obter_professor_id(authorization: Optional[str] = Header(None)) -> int:
     if settings.LOAD_TEST_MODE:
         return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
@@ -36,11 +36,11 @@ def _obter_professor_id(authorization: Optional[str] = Header(None), session: Se
 async def criar_modulo(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        modulo = service.criar_modulo(curso_id, professor_id)
+        modulo = await service.criar_modulo(curso_id, professor_id)
         return RespostaPadrao(data=modulo, message="Módulo criado com sucesso", status=201)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -54,11 +54,11 @@ async def criar_modulo(
 async def listar_modulos(
     curso_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        resultado = service.listar_modulos(curso_id, professor_id)
+        resultado = await service.listar_modulos(curso_id, professor_id)
         return RespostaPadrao(data=resultado, message="Módulos listados com sucesso", status=200)
     except CursoNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -73,11 +73,11 @@ async def obter_modulo(
     curso_id: int,
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        modulo = service.obter_modulo(curso_id, modulo_id, professor_id)
+        modulo = await service.obter_modulo(curso_id, modulo_id, professor_id)
         return RespostaPadrao(data=modulo, message="Módulo obtido com sucesso", status=200)
     except (CursoNaoEncontradoException, ModuloNaoEncontradoException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -93,11 +93,11 @@ async def editar_modulo(
     modulo_id: int,
     requisicao: ModuloEditarRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        modulo = service.editar_modulo(curso_id, modulo_id, requisicao, professor_id)
+        modulo = await service.editar_modulo(curso_id, modulo_id, requisicao, professor_id)
         return RespostaPadrao(data=modulo, message="Módulo atualizado com sucesso", status=200)
     except (CursoNaoEncontradoException, ModuloNaoEncontradoException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -112,11 +112,11 @@ async def deletar_modulo(
     curso_id: int,
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        service.deletar_modulo(curso_id, modulo_id, professor_id)
+        await service.deletar_modulo(curso_id, modulo_id, professor_id)
         return RespostaPadrao(data=None, message="Módulo deletado com sucesso", status=200)
     except (CursoNaoEncontradoException, ModuloNaoEncontradoException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -132,11 +132,11 @@ async def upload_capa_modulo(
     modulo_id: int,
     arquivo: UploadFile = File(...),
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ModuloService(session)
-        modulo = service.upload_capa(curso_id, modulo_id, professor_id, arquivo)
+        modulo = await service.upload_capa(curso_id, modulo_id, professor_id, arquivo)
         return RespostaPadrao(data=modulo, message="Capa enviada com sucesso", status=200)
     except (CursoNaoEncontradoException, ModuloNaoEncontradoException) as e:
         raise HTTPException(status_code=404, detail=e.message)

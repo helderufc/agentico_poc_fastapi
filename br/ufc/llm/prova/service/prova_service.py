@@ -1,5 +1,5 @@
 from typing import List
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from br.ufc.llm.prova.domain.prova import Prova, Pergunta, Alternativa
 from br.ufc.llm.prova.dto.prova_dto import (
@@ -23,21 +23,18 @@ from br.ufc.llm.curso.exception.curso_exception import CursoAcessoNegadoExceptio
 
 
 class ProvaService:
-    """Serviço de negócio para gerenciamento de provas"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
         self.repository = ProvaRepository(session)
         self.pergunta_repository = PerguntaRepository(session)
         self.modulo_repository = ModuloRepository(session)
         self.curso_repository = CursoRepository(session)
 
-    def criar_prova(self, modulo_id: int, requisicao: ProvaRequest, professor_id: int) -> ProvaResponse:
-        """Criar prova vinculada a módulo (RF29)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
+    async def criar_prova(self, modulo_id: int, requisicao: ProvaRequest, professor_id: int) -> ProvaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
 
-        # Verificar se módulo já tem prova
-        prova_existente = self.repository.find_by_modulo(modulo_id)
+        prova_existente = await self.repository.find_by_modulo(modulo_id)
         if prova_existente:
             raise ProvaJaExisteException()
 
@@ -47,21 +44,19 @@ class ProvaService:
             mostrar_respostas_corretas=requisicao.mostrar_respostas_corretas,
             mostrar_valores=requisicao.mostrar_valores
         )
-        prova_criada = self.repository.create(prova)
-        return self._to_response(prova_criada)
+        prova_criada = await self.repository.create(prova)
+        return await self._to_response(prova_criada)
 
-    def obter_prova(self, modulo_id: int, professor_id: int) -> ProvaResponse:
-        """Obter prova do módulo com perguntas"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        prova = self.repository.find_by_modulo(modulo_id)
+    async def obter_prova(self, modulo_id: int, professor_id: int) -> ProvaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        prova = await self.repository.find_by_modulo(modulo_id)
         if not prova:
             raise ProvaNaoEncontradaException()
-        return self._to_response(prova)
+        return await self._to_response(prova)
 
-    def editar_prova(self, modulo_id: int, requisicao: ProvaRequest, professor_id: int) -> ProvaResponse:
-        """Editar configurações da prova (RF32-RF33)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        prova = self.repository.find_by_modulo(modulo_id)
+    async def editar_prova(self, modulo_id: int, requisicao: ProvaRequest, professor_id: int) -> ProvaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        prova = await self.repository.find_by_modulo(modulo_id)
         if not prova:
             raise ProvaNaoEncontradaException()
 
@@ -69,27 +64,25 @@ class ProvaService:
         prova.mostrar_respostas_corretas = requisicao.mostrar_respostas_corretas
         prova.mostrar_valores = requisicao.mostrar_valores
 
-        prova_atualizada = self.repository.update(prova)
-        return self._to_response(prova_atualizada)
+        prova_atualizada = await self.repository.update(prova)
+        return await self._to_response(prova_atualizada)
 
-    def deletar_prova(self, modulo_id: int, professor_id: int) -> None:
-        """Deletar prova"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        prova = self.repository.find_by_modulo(modulo_id)
+    async def deletar_prova(self, modulo_id: int, professor_id: int) -> None:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        prova = await self.repository.find_by_modulo(modulo_id)
         if not prova:
             raise ProvaNaoEncontradaException()
-        self.repository.delete(prova)
+        await self.repository.delete(prova)
 
-    def adicionar_pergunta(self, prova_id: int, requisicao: PerguntaRequest, professor_id: int) -> PerguntaResponse:
-        """Adicionar pergunta com alternativas (RF30, RF31)"""
-        prova = self.repository.find_by_id(prova_id)
+    async def adicionar_pergunta(self, prova_id: int, requisicao: PerguntaRequest, professor_id: int) -> PerguntaResponse:
+        prova = await self.repository.find_by_id(prova_id)
         if not prova:
             raise ProvaNaoEncontradaException()
 
-        self._validar_acesso_modulo(prova.modulo_id, professor_id)
+        await self._validar_acesso_modulo(prova.modulo_id, professor_id)
         self._validar_alternativas(requisicao.alternativas)
 
-        total = self.pergunta_repository.count_by_prova(prova_id)
+        total = await self.pergunta_repository.count_by_prova(prova_id)
         ordem = total + 1
 
         pergunta = Pergunta(
@@ -99,7 +92,7 @@ class ProvaService:
             prova_id=prova_id
         )
         self.session.add(pergunta)
-        self.session.flush()  # Para obter o ID
+        await self.session.flush()
 
         for alt_req in requisicao.alternativas:
             alternativa = Alternativa(
@@ -109,19 +102,18 @@ class ProvaService:
             )
             self.session.add(alternativa)
 
-        self.session.commit()
-        self.session.refresh(pergunta)
+        await self.session.commit()
+        await self.session.refresh(pergunta)
         return self._pergunta_to_response(pergunta)
 
-    def editar_pergunta(self, prova_id: int, pergunta_id: int, requisicao: PerguntaRequest, professor_id: int) -> PerguntaResponse:
-        """Editar pergunta e suas alternativas"""
-        prova = self.repository.find_by_id(prova_id)
+    async def editar_pergunta(self, prova_id: int, pergunta_id: int, requisicao: PerguntaRequest, professor_id: int) -> PerguntaResponse:
+        prova = await self.repository.find_by_id(prova_id)
         if not prova:
             raise ProvaNaoEncontradaException()
 
-        self._validar_acesso_modulo(prova.modulo_id, professor_id)
+        await self._validar_acesso_modulo(prova.modulo_id, professor_id)
 
-        pergunta = self.pergunta_repository.find_by_id(pergunta_id)
+        pergunta = await self.pergunta_repository.find_by_id(pergunta_id)
         if not pergunta or pergunta.prova_id != prova_id:
             raise PerguntaNaoEncontradaException()
 
@@ -130,8 +122,7 @@ class ProvaService:
         pergunta.enunciado = requisicao.enunciado
         pergunta.pontos = requisicao.pontos
 
-        # Remover alternativas antigas e criar novas
-        self.pergunta_repository.delete_alternativas(pergunta_id)
+        await self.pergunta_repository.delete_alternativas(pergunta_id)
 
         for alt_req in requisicao.alternativas:
             alternativa = Alternativa(
@@ -141,29 +132,27 @@ class ProvaService:
             )
             self.session.add(alternativa)
 
-        self.session.commit()
-        self.session.refresh(pergunta)
+        await self.session.commit()
+        await self.session.refresh(pergunta)
         return self._pergunta_to_response(pergunta)
 
-    def deletar_pergunta(self, prova_id: int, pergunta_id: int, professor_id: int) -> None:
-        """Deletar pergunta"""
-        prova = self.repository.find_by_id(prova_id)
+    async def deletar_pergunta(self, prova_id: int, pergunta_id: int, professor_id: int) -> None:
+        prova = await self.repository.find_by_id(prova_id)
         if not prova:
             raise ProvaNaoEncontradaException()
 
-        self._validar_acesso_modulo(prova.modulo_id, professor_id)
+        await self._validar_acesso_modulo(prova.modulo_id, professor_id)
 
-        pergunta = self.pergunta_repository.find_by_id(pergunta_id)
+        pergunta = await self.pergunta_repository.find_by_id(pergunta_id)
         if not pergunta or pergunta.prova_id != prova_id:
             raise PerguntaNaoEncontradaException()
 
-        self.pergunta_repository.delete(pergunta)
+        await self.pergunta_repository.delete(pergunta)
 
-    def criar_quiz_manual(self, modulo_id: int, requisicao: QuizManualRequest, professor_id: int) -> ProvaResponse:
-        """Criar prova completa com perguntas e alternativas em uma única operação"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
+    async def criar_quiz_manual(self, modulo_id: int, requisicao: QuizManualRequest, professor_id: int) -> ProvaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
 
-        prova_existente = self.repository.find_by_modulo(modulo_id)
+        prova_existente = await self.repository.find_by_modulo(modulo_id)
         if prova_existente:
             raise ProvaJaExisteException()
 
@@ -176,7 +165,7 @@ class ProvaService:
             mostrar_respostas_corretas=requisicao.mostrar_respostas_corretas,
             mostrar_valores=requisicao.mostrar_valores
         )
-        prova_criada = self.repository.create(prova)
+        prova_criada = await self.repository.create(prova)
 
         for ordem, pergunta_req in enumerate(requisicao.perguntas, start=1):
             pergunta = Pergunta(
@@ -186,7 +175,7 @@ class ProvaService:
                 prova_id=prova_criada.id
             )
             self.session.add(pergunta)
-            self.session.flush()
+            await self.session.flush()
 
             for alt_req in pergunta_req.alternativas:
                 alternativa = Alternativa(
@@ -196,21 +185,20 @@ class ProvaService:
                 )
                 self.session.add(alternativa)
 
-        self.session.commit()
-        self.session.refresh(prova_criada)
-        return self._to_response(prova_criada)
+        await self.session.commit()
+        await self.session.refresh(prova_criada)
+        return await self._to_response(prova_criada)
 
-    def gerar_quiz_ia(self, modulo_id: int, professor_id: int, num_perguntas: int = 5) -> QuizGeradoResponse:
-        """Gera quiz via GPT-4o a partir do conteúdo do módulo (RF35-RF37)"""
+    async def gerar_quiz_ia(self, modulo_id: int, professor_id: int, num_perguntas: int = 5) -> QuizGeradoResponse:
         from br.ufc.llm.shared.service.openai_service import gerar_quiz, extrair_texto_pdf
         from br.ufc.llm.aula.repository.aula_repository import AulaRepository
         import re
         import os
 
-        self._validar_acesso_modulo(modulo_id, professor_id)
+        await self._validar_acesso_modulo(modulo_id, professor_id)
 
         aula_repo = AulaRepository(self.session)
-        aulas = aula_repo.find_by_modulo(modulo_id)
+        aulas = await aula_repo.find_by_modulo(modulo_id)
 
         partes = []
         for aula in aulas:
@@ -240,16 +228,15 @@ class ProvaService:
         ]
         return QuizGeradoResponse(perguntas=perguntas)
 
-    def obter_estatisticas(self, modulo_id: int, professor_id: int) -> EstatisticasProvaResponse:
-        """Estatísticas de respostas da prova (RF34)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        prova = self.repository.find_by_modulo(modulo_id)
+    async def obter_estatisticas(self, modulo_id: int, professor_id: int) -> EstatisticasProvaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        prova = await self.repository.find_by_modulo(modulo_id)
         if not prova:
             raise ProvaNaoEncontradaException()
 
-        perguntas = self.pergunta_repository.find_by_prova(prova.id)
-        contagem = self.pergunta_repository.count_respostas_por_alternativa(prova.id)
-        total_respondentes = self.pergunta_repository.count_respondentes(prova.id)
+        perguntas = await self.pergunta_repository.find_by_prova(prova.id)
+        contagem = await self.pergunta_repository.count_respostas_por_alternativa(prova.id)
+        total_respondentes = await self.pergunta_repository.count_respondentes(prova.id)
 
         perguntas_stat = []
         for pergunta in perguntas:
@@ -278,7 +265,6 @@ class ProvaService:
         )
 
     def _validar_alternativas(self, alternativas: list) -> None:
-        """Valida que há mínimo 2 alternativas e exatamente 1 correta (RF30)"""
         if len(alternativas) < 2:
             raise PerguntaInvalidaException("A pergunta deve ter no mínimo 2 alternativas")
 
@@ -288,20 +274,18 @@ class ProvaService:
         if corretas > 1:
             raise PerguntaInvalidaException("A pergunta deve ter exatamente 1 alternativa correta")
 
-    def _validar_acesso_modulo(self, modulo_id: int, professor_id: int):
-        """Valida que professor tem acesso ao módulo"""
-        modulo = self.modulo_repository.find_by_id(modulo_id)
+    async def _validar_acesso_modulo(self, modulo_id: int, professor_id: int):
+        modulo = await self.modulo_repository.find_by_id(modulo_id)
         if not modulo:
             raise ModuloNaoEncontradoException()
-        curso = self.curso_repository.find_by_id(modulo.curso_id)
+        curso = await self.curso_repository.find_by_id(modulo.curso_id)
         if not curso:
             raise ModuloNaoEncontradoException()
         if curso.professor_id != professor_id:
             raise CursoAcessoNegadoException()
 
-    def _to_response(self, prova: Prova) -> ProvaResponse:
-        """Converter prova para DTO de resposta"""
-        perguntas = self.pergunta_repository.find_by_prova(prova.id)
+    async def _to_response(self, prova: Prova) -> ProvaResponse:
+        perguntas = await self.pergunta_repository.find_by_prova(prova.id)
         return ProvaResponse(
             id=prova.id,
             modulo_id=prova.modulo_id,
@@ -312,7 +296,6 @@ class ProvaService:
         )
 
     def _pergunta_to_response(self, pergunta: Pergunta) -> PerguntaResponse:
-        """Converter pergunta para DTO de resposta"""
         from br.ufc.llm.prova.dto.prova_dto import AlternativaResponse
         return PerguntaResponse(
             id=pergunta.id,

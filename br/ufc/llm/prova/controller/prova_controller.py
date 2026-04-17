@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Header
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from br.ufc.llm.shared.domain.resposta_padrao import RespostaPadrao
@@ -21,7 +21,7 @@ from config import settings
 router = APIRouter(prefix="/api/v1", tags=["provas"])
 
 
-def _obter_professor_id(authorization: Optional[str] = Header(None), session: Session = Depends(get_db)) -> int:
+def _obter_professor_id(authorization: Optional[str] = Header(None)) -> int:
     if settings.LOAD_TEST_MODE:
         return settings.LOAD_TEST_PROFESSOR_ID
     if not authorization or not authorization.startswith("Bearer "):
@@ -44,11 +44,11 @@ async def criar_prova(
     modulo_id: int,
     requisicao: ProvaRequest = ProvaRequest(),
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        prova = service.criar_prova(modulo_id, requisicao, professor_id)
+        prova = await service.criar_prova(modulo_id, requisicao, professor_id)
         return RespostaPadrao(data=prova, message="Prova criada com sucesso", status=201)
     except ModuloNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -64,11 +64,11 @@ async def criar_prova(
 async def obter_prova(
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        prova = service.obter_prova(modulo_id, professor_id)
+        prova = await service.obter_prova(modulo_id, professor_id)
         return RespostaPadrao(data=prova, message="Prova obtida com sucesso", status=200)
     except (ModuloNaoEncontradoException, ProvaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -83,11 +83,11 @@ async def editar_prova(
     modulo_id: int,
     requisicao: ProvaRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        prova = service.editar_prova(modulo_id, requisicao, professor_id)
+        prova = await service.editar_prova(modulo_id, requisicao, professor_id)
         return RespostaPadrao(data=prova, message="Prova atualizada com sucesso", status=200)
     except (ModuloNaoEncontradoException, ProvaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -101,11 +101,11 @@ async def editar_prova(
 async def deletar_prova(
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        service.deletar_prova(modulo_id, professor_id)
+        await service.deletar_prova(modulo_id, professor_id)
         return RespostaPadrao(data=None, message="Prova deletada com sucesso", status=200)
     except (ModuloNaoEncontradoException, ProvaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -120,11 +120,11 @@ async def criar_quiz_manual(
     modulo_id: int,
     requisicao: QuizManualRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        prova = service.criar_quiz_manual(modulo_id, requisicao, professor_id)
+        prova = await service.criar_quiz_manual(modulo_id, requisicao, professor_id)
         return RespostaPadrao(data=prova, message="Quiz criado com sucesso", status=201)
     except ModuloNaoEncontradoException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -144,7 +144,6 @@ async def gerar_quiz_ia(
     professor_id: int = Depends(_obter_professor_id),
 ):
     from br.ufc.llm.shared.tasks.ia_tasks import gerar_quiz_ia_task
-
     task = gerar_quiz_ia_task.delay(modulo_id, professor_id)
     return RespostaPadrao(
         data={"task_id": task.id, "status": "processando"},
@@ -157,11 +156,11 @@ async def gerar_quiz_ia(
 async def obter_estatisticas(
     modulo_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        estatisticas = service.obter_estatisticas(modulo_id, professor_id)
+        estatisticas = await service.obter_estatisticas(modulo_id, professor_id)
         return RespostaPadrao(data=estatisticas, message="Estatísticas obtidas com sucesso", status=200)
     except (ModuloNaoEncontradoException, ProvaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -176,11 +175,11 @@ async def adicionar_pergunta(
     prova_id: int,
     requisicao: PerguntaRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        pergunta = service.adicionar_pergunta(prova_id, requisicao, professor_id)
+        pergunta = await service.adicionar_pergunta(prova_id, requisicao, professor_id)
         return RespostaPadrao(data=pergunta, message="Pergunta adicionada com sucesso", status=201)
     except ProvaNaoEncontradaException as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -198,11 +197,11 @@ async def editar_pergunta(
     pergunta_id: int,
     requisicao: PerguntaRequest,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        pergunta = service.editar_pergunta(prova_id, pergunta_id, requisicao, professor_id)
+        pergunta = await service.editar_pergunta(prova_id, pergunta_id, requisicao, professor_id)
         return RespostaPadrao(data=pergunta, message="Pergunta atualizada com sucesso", status=200)
     except (ProvaNaoEncontradaException, PerguntaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)
@@ -219,11 +218,11 @@ async def deletar_pergunta(
     prova_id: int,
     pergunta_id: int,
     professor_id: int = Depends(_obter_professor_id),
-    session: Session = Depends(get_db)
+    session: AsyncSession = Depends(get_db)
 ):
     try:
         service = ProvaService(session)
-        service.deletar_pergunta(prova_id, pergunta_id, professor_id)
+        await service.deletar_pergunta(prova_id, pergunta_id, professor_id)
         return RespostaPadrao(data=None, message="Pergunta deletada com sucesso", status=200)
     except (ProvaNaoEncontradaException, PerguntaNaoEncontradaException) as e:
         raise HTTPException(status_code=404, detail=e.message)

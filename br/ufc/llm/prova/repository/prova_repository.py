@@ -1,95 +1,94 @@
 from typing import Optional, List, Dict
-from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import select, func, delete
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from br.ufc.llm.prova.domain.prova import Prova, Pergunta, Alternativa
 
 
 class ProvaRepository:
-    """Repositório para operações de persistência de provas"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, prova: Prova) -> Prova:
+    async def create(self, prova: Prova) -> Prova:
         self.session.add(prova)
-        self.session.commit()
-        self.session.refresh(prova)
+        await self.session.commit()
+        await self.session.refresh(prova)
         return prova
 
-    def find_by_id(self, prova_id: int) -> Optional[Prova]:
-        return self.session.query(Prova).filter(Prova.id == prova_id).first()
+    async def find_by_id(self, prova_id: int) -> Optional[Prova]:
+        result = await self.session.execute(select(Prova).where(Prova.id == prova_id))
+        return result.scalars().first()
 
-    def find_by_modulo(self, modulo_id: int) -> Optional[Prova]:
-        return self.session.query(Prova).filter(Prova.modulo_id == modulo_id).first()
+    async def find_by_modulo(self, modulo_id: int) -> Optional[Prova]:
+        result = await self.session.execute(select(Prova).where(Prova.modulo_id == modulo_id))
+        return result.scalars().first()
 
-    def update(self, prova: Prova) -> Prova:
-        self.session.merge(prova)
-        self.session.commit()
-        self.session.refresh(prova)
+    async def update(self, prova: Prova) -> Prova:
+        prova = await self.session.merge(prova)
+        await self.session.commit()
+        await self.session.refresh(prova)
         return prova
 
-    def delete(self, prova: Prova) -> None:
-        self.session.delete(prova)
-        self.session.commit()
+    async def delete(self, prova: Prova) -> None:
+        await self.session.delete(prova)
+        await self.session.commit()
 
 
 class PerguntaRepository:
-    """Repositório para operações de persistência de perguntas"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, pergunta: Pergunta) -> Pergunta:
+    async def create(self, pergunta: Pergunta) -> Pergunta:
         self.session.add(pergunta)
-        self.session.commit()
-        self.session.refresh(pergunta)
+        await self.session.commit()
+        await self.session.refresh(pergunta)
         return pergunta
 
-    def find_by_id(self, pergunta_id: int) -> Optional[Pergunta]:
-        return self.session.query(Pergunta).filter(Pergunta.id == pergunta_id).first()
+    async def find_by_id(self, pergunta_id: int) -> Optional[Pergunta]:
+        result = await self.session.execute(select(Pergunta).where(Pergunta.id == pergunta_id))
+        return result.scalars().first()
 
-    def find_by_prova(self, prova_id: int) -> List[Pergunta]:
-        return (
-            self.session.query(Pergunta)
-            .filter(Pergunta.prova_id == prova_id)
-            .order_by(Pergunta.ordem)
-            .all()
+    async def find_by_prova(self, prova_id: int) -> List[Pergunta]:
+        result = await self.session.execute(
+            select(Pergunta).where(Pergunta.prova_id == prova_id).order_by(Pergunta.ordem)
         )
+        return list(result.scalars().all())
 
-    def count_by_prova(self, prova_id: int) -> int:
-        return self.session.query(Pergunta).filter(Pergunta.prova_id == prova_id).count()
+    async def count_by_prova(self, prova_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Pergunta).where(Pergunta.prova_id == prova_id)
+        )
+        return result.scalar()
 
-    def update(self, pergunta: Pergunta) -> Pergunta:
-        self.session.merge(pergunta)
-        self.session.commit()
-        self.session.refresh(pergunta)
+    async def update(self, pergunta: Pergunta) -> Pergunta:
+        pergunta = await self.session.merge(pergunta)
+        await self.session.commit()
+        await self.session.refresh(pergunta)
         return pergunta
 
-    def delete(self, pergunta: Pergunta) -> None:
-        self.session.delete(pergunta)
-        self.session.commit()
+    async def delete(self, pergunta: Pergunta) -> None:
+        await self.session.delete(pergunta)
+        await self.session.commit()
 
-    def delete_alternativas(self, pergunta_id: int) -> None:
-        self.session.query(Alternativa).filter(Alternativa.pergunta_id == pergunta_id).delete()
-        self.session.commit()
+    async def delete_alternativas(self, pergunta_id: int) -> None:
+        await self.session.execute(delete(Alternativa).where(Alternativa.pergunta_id == pergunta_id))
+        await self.session.commit()
 
-    def count_respostas_por_alternativa(self, prova_id: int) -> Dict[int, int]:
-        """Retorna {alternativa_id: total_respostas} para toda a prova"""
+    async def count_respostas_por_alternativa(self, prova_id: int) -> Dict[int, int]:
         from br.ufc.llm.matricula.domain.matricula import RespostaProva
-        rows = (
-            self.session.query(RespostaProva.alternativa_id, func.count(RespostaProva.id))
-            .filter(RespostaProva.prova_id == prova_id)
+        result = await self.session.execute(
+            select(RespostaProva.alternativa_id, func.count(RespostaProva.id))
+            .where(RespostaProva.prova_id == prova_id)
             .group_by(RespostaProva.alternativa_id)
-            .all()
         )
-        return {alt_id: total for alt_id, total in rows}
+        return {alt_id: total for alt_id, total in result.all()}
 
-    def count_respondentes(self, prova_id: int) -> int:
-        """Total de alunos distintos que responderam a prova"""
+    async def count_respondentes(self, prova_id: int) -> int:
         from br.ufc.llm.matricula.domain.matricula import RespostaProva
-        return (
-            self.session.query(func.count(func.distinct(RespostaProva.aluno_id)))
-            .filter(RespostaProva.prova_id == prova_id)
-            .scalar()
-        ) or 0
+        result = await self.session.execute(
+            select(func.count(func.distinct(RespostaProva.aluno_id)))
+            .where(RespostaProva.prova_id == prova_id)
+        )
+        return result.scalar() or 0

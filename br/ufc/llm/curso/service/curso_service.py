@@ -1,6 +1,6 @@
 import os
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import UploadFile
 
 from br.ufc.llm.curso.domain.curso import Curso
@@ -13,49 +13,44 @@ from br.ufc.llm.curso.exception.curso_exception import (
 
 
 class CursoService:
-    """Serviço de negócio para gerenciamento de cursos"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
         self.repository = CursoRepository(session)
 
-    def criar_curso(self, requisicao: CursoRequest, professor_id: int) -> CursoResponse:
-        """Criar novo curso (RF09, RF11, RF14)"""
+    async def criar_curso(self, requisicao: CursoRequest, professor_id: int) -> CursoResponse:
         curso = Curso(
             titulo=requisicao.titulo,
-            categoria=requisicao.categoria.upper(),  # RF11: uppercase
+            categoria=requisicao.categoria.upper(),
             descricao=requisicao.descricao,
             carga_horaria=requisicao.carga_horaria,
             requer_endereco=requisicao.requer_endereco,
             requer_genero=requisicao.requer_genero,
             requer_idade=requisicao.requer_idade,
-            status="RASCUNHO",  # RF14: padrão RASCUNHO
+            status="RASCUNHO",
             professor_id=professor_id
         )
-        curso_criado = self.repository.create(curso)
+        curso_criado = await self.repository.create(curso)
         return CursoResponse.model_validate(curso_criado)
 
-    def listar_cursos(
+    async def listar_cursos(
         self,
         professor_id: int,
         status: Optional[str] = None,
         q: Optional[str] = None
     ) -> ListaCursosResponse:
-        """Listar cursos do professor (RF15, RF17)"""
-        cursos, total = self.repository.find_by_professor(professor_id, status, q)
+        cursos, total = await self.repository.find_by_professor(professor_id, status, q)
         return ListaCursosResponse(
             cursos=[CursoResponse.model_validate(c) for c in cursos],
             total=total
         )
 
-    def obter_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
-        """Obter curso por ID (RF09) — valida ownership"""
-        curso = self._obter_e_validar(curso_id, professor_id)
+    async def obter_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
+        curso = await self._obter_e_validar(curso_id, professor_id)
         return CursoResponse.model_validate(curso)
 
-    def editar_curso(self, curso_id: int, requisicao: CursoRequest, professor_id: int) -> CursoResponse:
-        """Editar curso (RF16)"""
-        curso = self._obter_e_validar(curso_id, professor_id)
+    async def editar_curso(self, curso_id: int, requisicao: CursoRequest, professor_id: int) -> CursoResponse:
+        curso = await self._obter_e_validar(curso_id, professor_id)
 
         curso.titulo = requisicao.titulo
         curso.categoria = requisicao.categoria.upper()
@@ -65,31 +60,27 @@ class CursoService:
         curso.requer_genero = requisicao.requer_genero
         curso.requer_idade = requisicao.requer_idade
 
-        curso_atualizado = self.repository.update(curso)
+        curso_atualizado = await self.repository.update(curso)
         return CursoResponse.model_validate(curso_atualizado)
 
-    def deletar_curso(self, curso_id: int, professor_id: int) -> None:
-        """Deletar curso (RF09)"""
-        curso = self._obter_e_validar(curso_id, professor_id)
-        self.repository.delete(curso)
+    async def deletar_curso(self, curso_id: int, professor_id: int) -> None:
+        curso = await self._obter_e_validar(curso_id, professor_id)
+        await self.repository.delete(curso)
 
-    def publicar_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
-        """Publicar curso (RF14)"""
-        curso = self._obter_e_validar(curso_id, professor_id)
+    async def publicar_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
+        curso = await self._obter_e_validar(curso_id, professor_id)
         curso.status = "PUBLICADO"
-        curso_atualizado = self.repository.update(curso)
+        curso_atualizado = await self.repository.update(curso)
         return CursoResponse.model_validate(curso_atualizado)
 
-    def arquivar_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
-        """Arquivar curso (RF14)"""
-        curso = self._obter_e_validar(curso_id, professor_id)
+    async def arquivar_curso(self, curso_id: int, professor_id: int) -> CursoResponse:
+        curso = await self._obter_e_validar(curso_id, professor_id)
         curso.status = "ARQUIVADO"
-        curso_atualizado = self.repository.update(curso)
+        curso_atualizado = await self.repository.update(curso)
         return CursoResponse.model_validate(curso_atualizado)
 
-    def upload_capa(self, curso_id: int, professor_id: int, arquivo: UploadFile) -> CursoResponse:
-        """Upload de capa do curso (RF10)"""
-        curso = self._obter_e_validar(curso_id, professor_id)
+    async def upload_capa(self, curso_id: int, professor_id: int, arquivo: UploadFile) -> CursoResponse:
+        curso = await self._obter_e_validar(curso_id, professor_id)
 
         extensao = arquivo.filename.split(".")[-1].lower()
         if extensao not in ["jpg", "jpeg", "png", "gif", "webp"]:
@@ -103,17 +94,16 @@ class CursoService:
         nome_arquivo = f"{timestamp}.{extensao}"
         caminho = os.path.join(diretorio, nome_arquivo)
 
-        conteudo = arquivo.file.read()
+        conteudo = await arquivo.read()
         with open(caminho, "wb") as f:
             f.write(conteudo)
 
         curso.capa = caminho
-        curso_atualizado = self.repository.update(curso)
+        curso_atualizado = await self.repository.update(curso)
         return CursoResponse.model_validate(curso_atualizado)
 
-    def _obter_e_validar(self, curso_id: int, professor_id: int) -> Curso:
-        """Obter curso e validar que o professor é o dono"""
-        curso = self.repository.find_by_id(curso_id)
+    async def _obter_e_validar(self, curso_id: int, professor_id: int) -> Curso:
+        curso = await self.repository.find_by_id(curso_id)
         if not curso:
             raise CursoNaoEncontradoException()
         if curso.professor_id != professor_id:

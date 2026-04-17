@@ -1,7 +1,7 @@
 import os
 import bleach
 from typing import Optional
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from fastapi import UploadFile
 
 from br.ufc.llm.aula.domain.aula import Aula
@@ -16,7 +16,6 @@ from br.ufc.llm.modulo.exception.modulo_exception import ModuloNaoEncontradoExce
 from br.ufc.llm.curso.repository.curso_repository import CursoRepository
 from br.ufc.llm.curso.exception.curso_exception import CursoAcessoNegadoException
 
-# Tags HTML permitidas pelo bleach
 TAGS_PERMITIDAS = [
     "p", "b", "i", "u", "strong", "em", "br", "ul", "ol", "li",
     "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "a", "img",
@@ -30,26 +29,23 @@ ATRIBUTOS_PERMITIDOS = {
 
 
 def sanitizar_html(conteudo: Optional[str]) -> Optional[str]:
-    """Sanitizar HTML com bleach (RF24)"""
     if conteudo is None:
         return None
     return bleach.clean(conteudo, tags=TAGS_PERMITIDAS, attributes=ATRIBUTOS_PERMITIDOS, strip=True)
 
 
 class AulaService:
-    """Serviço de negócio para gerenciamento de aulas"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
         self.repository = AulaRepository(session)
         self.modulo_repository = ModuloRepository(session)
         self.curso_repository = CursoRepository(session)
 
-    def criar_aula(self, modulo_id: int, requisicao: AulaRequest, professor_id: int) -> AulaResponse:
-        """Criar aula em um módulo (RF22, RF24)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
+    async def criar_aula(self, modulo_id: int, requisicao: AulaRequest, professor_id: int) -> AulaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
 
-        total = self.repository.count_by_modulo(modulo_id)
+        total = await self.repository.count_by_modulo(modulo_id)
         ordem = total + 1
 
         aula = Aula(
@@ -58,30 +54,27 @@ class AulaService:
             conteudo_ck_editor=sanitizar_html(requisicao.conteudo_ck_editor),
             modulo_id=modulo_id
         )
-        aula_criada = self.repository.create(aula)
+        aula_criada = await self.repository.create(aula)
         return AulaResponse.model_validate(aula_criada)
 
-    def listar_aulas(self, modulo_id: int, professor_id: int) -> ListaAulasResponse:
-        """Listar aulas de um módulo"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aulas = self.repository.find_by_modulo(modulo_id)
+    async def listar_aulas(self, modulo_id: int, professor_id: int) -> ListaAulasResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aulas = await self.repository.find_by_modulo(modulo_id)
         return ListaAulasResponse(
             aulas=[AulaResponse.model_validate(a) for a in aulas],
             total=len(aulas)
         )
 
-    def obter_aula(self, modulo_id: int, aula_id: int, professor_id: int) -> AulaResponse:
-        """Obter aula por ID"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+    async def obter_aula(self, modulo_id: int, aula_id: int, professor_id: int) -> AulaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
         return AulaResponse.model_validate(aula)
 
-    def editar_aula(self, modulo_id: int, aula_id: int, requisicao: AulaEditarRequest, professor_id: int) -> AulaResponse:
-        """Editar aula — sanitiza conteúdo HTML (RF24)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+    async def editar_aula(self, modulo_id: int, aula_id: int, requisicao: AulaEditarRequest, professor_id: int) -> AulaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
 
@@ -90,21 +83,19 @@ class AulaService:
         if requisicao.conteudo_ck_editor is not None:
             aula.conteudo_ck_editor = sanitizar_html(requisicao.conteudo_ck_editor)
 
-        aula_atualizada = self.repository.update(aula)
+        aula_atualizada = await self.repository.update(aula)
         return AulaResponse.model_validate(aula_atualizada)
 
-    def deletar_aula(self, modulo_id: int, aula_id: int, professor_id: int) -> None:
-        """Deletar aula"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+    async def deletar_aula(self, modulo_id: int, aula_id: int, professor_id: int) -> None:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
-        self.repository.delete(aula)
+        await self.repository.delete(aula)
 
-    def upload_arquivo(self, modulo_id: int, aula_id: int, professor_id: int, arquivo: UploadFile) -> AulaResponse:
-        """Upload de arquivo (PDF ou vídeo) (RF23)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+    async def upload_arquivo(self, modulo_id: int, aula_id: int, professor_id: int, arquivo: UploadFile) -> AulaResponse:
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
 
@@ -124,21 +115,20 @@ class AulaService:
         nome_arquivo = f"{timestamp}.{extensao}"
         caminho = os.path.join(diretorio, nome_arquivo)
 
-        conteudo = arquivo.file.read()
+        conteudo = await arquivo.read()
         with open(caminho, "wb") as f:
             f.write(conteudo)
 
         aula.arquivo = caminho
         aula.tipo_arquivo = tipo
-        aula_atualizada = self.repository.update(aula)
+        aula_atualizada = await self.repository.update(aula)
         return AulaResponse.model_validate(aula_atualizada)
 
-    def gerar_conteudo(self, modulo_id: int, aula_id: int, professor_id: int) -> ConteudoGeradoResponse:
-        """Gera conteúdo HTML via GPT-4o a partir do PDF e/ou CKEditor (RF26-RF27)"""
+    async def gerar_conteudo(self, modulo_id: int, aula_id: int, professor_id: int) -> ConteudoGeradoResponse:
         from br.ufc.llm.shared.service.openai_service import gerar_conteudo_aula, extrair_texto_pdf
 
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
 
@@ -157,27 +147,25 @@ class AulaService:
         html_gerado = gerar_conteudo_aula("\n\n".join(partes))
         return ConteudoGeradoResponse(conteudo_gerado=html_gerado)
 
-    def confirmar_conteudo(
+    async def confirmar_conteudo(
         self, modulo_id: int, aula_id: int, professor_id: int,
         requisicao: ConfirmarConteudoRequest
     ) -> AulaResponse:
-        """Persiste o conteúdo gerado pela IA no campo conteudo_gerado (RF28)"""
-        self._validar_acesso_modulo(modulo_id, professor_id)
-        aula = self.repository.find_by_id(aula_id)
+        await self._validar_acesso_modulo(modulo_id, professor_id)
+        aula = await self.repository.find_by_id(aula_id)
         if not aula or aula.modulo_id != modulo_id:
             raise AulaNaoEncontradaException()
 
         aula.conteudo_gerado = requisicao.conteudo_gerado
-        aula_atualizada = self.repository.update(aula)
+        aula_atualizada = await self.repository.update(aula)
         return AulaResponse.model_validate(aula_atualizada)
 
-    def _validar_acesso_modulo(self, modulo_id: int, professor_id: int):
-        """Valida que professor tem acesso ao módulo"""
-        modulo = self.modulo_repository.find_by_id(modulo_id)
+    async def _validar_acesso_modulo(self, modulo_id: int, professor_id: int):
+        modulo = await self.modulo_repository.find_by_id(modulo_id)
         if not modulo:
             raise ModuloNaoEncontradoException()
 
-        curso = self.curso_repository.find_by_id(modulo.curso_id)
+        curso = await self.curso_repository.find_by_id(modulo.curso_id)
         if not curso:
             raise ModuloNaoEncontradoException()
         if curso.professor_id != professor_id:

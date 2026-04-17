@@ -1,41 +1,43 @@
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from br.ufc.llm.aula.domain.aula import Aula
 
 
 class AulaRepository:
-    """Repositório para operações de persistência de aulas"""
 
-    def __init__(self, session: Session):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
-    def create(self, aula: Aula) -> Aula:
+    async def create(self, aula: Aula) -> Aula:
         self.session.add(aula)
-        self.session.commit()
-        self.session.refresh(aula)
+        await self.session.commit()
+        await self.session.refresh(aula)
         return aula
 
-    def find_by_id(self, aula_id: int) -> Optional[Aula]:
-        return self.session.query(Aula).filter(Aula.id == aula_id).first()
+    async def find_by_id(self, aula_id: int) -> Optional[Aula]:
+        result = await self.session.execute(select(Aula).where(Aula.id == aula_id))
+        return result.scalars().first()
 
-    def find_by_modulo(self, modulo_id: int) -> List[Aula]:
-        return (
-            self.session.query(Aula)
-            .filter(Aula.modulo_id == modulo_id)
-            .order_by(Aula.ordem)
-            .all()
+    async def find_by_modulo(self, modulo_id: int) -> List[Aula]:
+        result = await self.session.execute(
+            select(Aula).where(Aula.modulo_id == modulo_id).order_by(Aula.ordem)
         )
+        return list(result.scalars().all())
 
-    def count_by_modulo(self, modulo_id: int) -> int:
-        return self.session.query(Aula).filter(Aula.modulo_id == modulo_id).count()
+    async def count_by_modulo(self, modulo_id: int) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(Aula).where(Aula.modulo_id == modulo_id)
+        )
+        return result.scalar()
 
-    def update(self, aula: Aula) -> Aula:
-        self.session.merge(aula)
-        self.session.commit()
-        self.session.refresh(aula)
+    async def update(self, aula: Aula) -> Aula:
+        aula = await self.session.merge(aula)
+        await self.session.commit()
+        await self.session.refresh(aula)
         return aula
 
-    def delete(self, aula: Aula) -> None:
-        self.session.delete(aula)
-        self.session.commit()
+    async def delete(self, aula: Aula) -> None:
+        await self.session.delete(aula)
+        await self.session.commit()
