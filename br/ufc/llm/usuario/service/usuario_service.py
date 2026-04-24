@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 import re
@@ -29,6 +30,11 @@ from br.ufc.llm.usuario.exception.usuario_exception import (
     AcessoNegadoException
 )
 from br.ufc.llm.shared.domain.seguranca import SenhaUtil, JWTUtil, TokenRecuperacaoUtil
+
+
+def _salvar_arquivo(caminho: str, conteudo: bytes) -> None:
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
 
 
 class UsuarioService:
@@ -186,8 +192,10 @@ class UsuarioService:
         conteudo = await arquivo.read()
 
         try:
-            imagem = Image.open(io.BytesIO(conteudo))
-            width, height = imagem.size
+            def _obter_dimensoes():
+                imagem = Image.open(io.BytesIO(conteudo))
+                return imagem.size
+            width, height = await asyncio.to_thread(_obter_dimensoes)
             if width < 200 or height < 200:
                 raise ValueError("Imagem deve ter no mínimo 200x200 pixels")
         except ValueError:
@@ -203,8 +211,7 @@ class UsuarioService:
         nome_arquivo = f"{int(timestamp)}.{extensao}"
         caminho_arquivo = os.path.join(diretorio_upload, nome_arquivo)
 
-        with open(caminho_arquivo, "wb") as f:
-            f.write(conteudo)
+        await asyncio.to_thread(_salvar_arquivo, caminho_arquivo, conteudo)
 
         usuario.foto_perfil = caminho_arquivo
         await self.usuario_repository.update(usuario)

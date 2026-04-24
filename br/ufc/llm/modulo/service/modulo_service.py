@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +10,11 @@ from br.ufc.llm.modulo.repository.modulo_repository import ModuloRepository
 from br.ufc.llm.modulo.exception.modulo_exception import ModuloNaoEncontradoException, ModuloAcessoNegadoException
 from br.ufc.llm.curso.repository.curso_repository import CursoRepository
 from br.ufc.llm.curso.exception.curso_exception import CursoNaoEncontradoException, CursoAcessoNegadoException
+
+
+def _salvar_arquivo(caminho: str, conteudo: bytes) -> None:
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
 
 
 class ModuloService:
@@ -101,8 +107,7 @@ class ModuloService:
         caminho = os.path.join(diretorio, nome_arquivo)
 
         conteudo = await arquivo.read()
-        with open(caminho, "wb") as f:
-            f.write(conteudo)
+        await asyncio.to_thread(_salvar_arquivo, caminho, conteudo)
 
         modulo.capa = caminho
         modulo_atualizado = await self.repository.update(modulo)

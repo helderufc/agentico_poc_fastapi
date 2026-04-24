@@ -1,3 +1,4 @@
+import asyncio
 import os
 import bleach
 from typing import Optional
@@ -15,6 +16,11 @@ from br.ufc.llm.modulo.repository.modulo_repository import ModuloRepository
 from br.ufc.llm.modulo.exception.modulo_exception import ModuloNaoEncontradoException
 from br.ufc.llm.curso.repository.curso_repository import CursoRepository
 from br.ufc.llm.curso.exception.curso_exception import CursoAcessoNegadoException
+
+def _salvar_arquivo(caminho: str, conteudo: bytes) -> None:
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
+
 
 TAGS_PERMITIDAS = [
     "p", "b", "i", "u", "strong", "em", "br", "ul", "ol", "li",
@@ -116,8 +122,7 @@ class AulaService:
         caminho = os.path.join(diretorio, nome_arquivo)
 
         conteudo = await arquivo.read()
-        with open(caminho, "wb") as f:
-            f.write(conteudo)
+        await asyncio.to_thread(_salvar_arquivo, caminho, conteudo)
 
         aula.arquivo = caminho
         aula.tipo_arquivo = tipo

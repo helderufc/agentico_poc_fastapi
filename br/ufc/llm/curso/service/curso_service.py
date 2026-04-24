@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,6 +11,11 @@ from br.ufc.llm.curso.exception.curso_exception import (
     CursoNaoEncontradoException,
     CursoAcessoNegadoException
 )
+
+
+def _salvar_arquivo(caminho: str, conteudo: bytes) -> None:
+    with open(caminho, "wb") as f:
+        f.write(conteudo)
 
 
 class CursoService:
@@ -95,8 +101,7 @@ class CursoService:
         caminho = os.path.join(diretorio, nome_arquivo)
 
         conteudo = await arquivo.read()
-        with open(caminho, "wb") as f:
-            f.write(conteudo)
+        await asyncio.to_thread(_salvar_arquivo, caminho, conteudo)
 
         curso.capa = caminho
         curso_atualizado = await self.repository.update(curso)
